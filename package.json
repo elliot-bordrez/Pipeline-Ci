@@ -14,10 +14,10 @@
     "test": "jest --coverage --coverageReporters=lcov"
   },
   "dependencies": {
-    "cookie-parser": "~1.4.4",
-    "debug": "~2.6.9",
-    "express": "~4.16.1",
-    "morgan": "~1.9.1"
+    "cookie-parser": "~1.4.7",
+    "debug": "~4.4.0",
+    "express": "~4.21.2",
+    "morgan": "~1.10.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
