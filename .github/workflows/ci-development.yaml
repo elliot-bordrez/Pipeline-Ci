@@ -1,0 +1,159 @@
+name: CI (development)
+
+on:
+  push:
+    branches: [ "development" ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    name: Build & Tests (lint/format/test/coverage)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit tests + coverage
+        run: npm test -- --coverage --coverageReporters=lcov
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+
+  sonar:
+    name: SonarCloud (Quality Gate)
+    runs-on: ubuntu-latest
+    needs: [ test ]
+
+    steps:
+      - name: Checkout (full history for better analysis)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+
+      - name: Quality Gate (block if failed)
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+          timeout: "300"
+
+  docker_build_and_scan:
+    name: Docker build + Trivy scan (block HIGH/CRITICAL)
+    runs-on: ubuntu-latest
+    needs: [ sonar ]
+
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tags
+        id: meta
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${GITHUB_REPOSITORY#*/}"
+          TAG="dev-${GITHUB_SHA::7}"
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (local)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.TAG }}
+
+      - name: Trivy scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
+          format: table
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  push_ghcr:
+    name: Push image to GHCR
+    runs-on: ubuntu-latest
+    needs: [ docker_build_and_scan ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tags
+        run: |
+          IMAGE="${{ needs.docker_build_and_scan.outputs.image }}"
+          TAG="${{ needs.docker_build_and_scan.outputs.tag }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Login to GHCR (best practice)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push (only after scan OK)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.TAG }}
+            ${{ env.IMAGE }}:dev-latest
