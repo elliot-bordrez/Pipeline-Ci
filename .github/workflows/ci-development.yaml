@@ -82,7 +82,10 @@ jobs:
       - name: Set image tags
         id: meta
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${GITHUB_REPOSITORY#*/}"
+          REPO_LOWER=$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')
+          OWNER_LOWER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+
+          IMAGE="ghcr.io/${OWNER_LOWER}/${REPO_LOWER}"
           TAG="dev-${GITHUB_SHA::7}"
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT

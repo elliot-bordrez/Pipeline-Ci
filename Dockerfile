@@ -4,12 +4,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# ---- build (si tu as du build; sinon tu peux enlever cette stage) ----
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Si tu as un build (TypeScript etc.), décommente :
 # RUN npm run build
 
 # ---- production ----
