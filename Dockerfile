@@ -1,32 +1,51 @@
-# ---- deps (dev deps for tests/build if needed) ----
+# ---- Dependencies stage ----
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
 
-# ---- prod-deps (only prod deps, with build tooling if native modules) ----
-FROM node:20-alpine AS prod-deps
-WORKDIR /app
+# Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Outils nécessaires si des dépendances ont des modules natifs
-RUN apk add --no-cache python3 make g++ \
-  && npm install --omit=dev \
-  && npm cache clean --force \
-  && apk del python3 make g++
+# Installer toutes les dépendances (dev + prod)
+RUN npm ci
 
-# ---- runner ----
-FROM node:20-alpine AS runner
+# ---- Build stage (si nécessaire pour compilation) ----
+FROM node:20-alpine AS builder
 WORKDIR /app
-ENV NODE_ENV=production
 
-# Copie uniquement les deps prod déjà installées
-COPY --from=prod-deps /app/node_modules ./node_modules
+# Copier les node_modules depuis deps
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Sécurité: user non-root
-RUN addgroup -S app && adduser -S app -G app
+# Si vous avez un build step, décommentez :
+# RUN npm run build
+
+# ---- Production stage ----
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copier uniquement les fichiers nécessaires
+COPY package*.json ./
+
+# Installer UNIQUEMENT les dépendances de production
+RUN npm ci --omit=dev --ignore-scripts
+
+# Copier le code source
+COPY . .
+
+# Copier les node_modules de production si nécessaire
+# (ou utiliser ceux installés juste au-dessus)
+
+# Nettoyage du cache npm
+RUN npm cache clean --force
+
+# Créer un utilisateur non-root pour la sécurité
+RUN addgroup -S app && adduser -S app -G app && \
+    chown -R app:app /app
+
 USER app
 
 EXPOSE 3000
-CMD ["npm","start"]
+
+CMD ["node", "./bin/www"]
