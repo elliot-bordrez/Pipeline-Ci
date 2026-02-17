@@ -2,7 +2,7 @@ name: CI (development)
 
 on:
   push:
-    branches: [ "development" ]
+    branches: ['development']
 
 permissions:
   contents: read
@@ -20,8 +20,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -44,7 +44,7 @@ jobs:
   sonar:
     name: SonarCloud (Quality Gate)
     runs-on: ubuntu-latest
-    needs: [ test ]
+    needs: [test]
 
     steps:
       - name: Checkout (full history for better analysis)
@@ -76,12 +76,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           scanMetadataReportFile: .scannerwork/report-task.txt
-          timeout: "300"
+          timeout: '300'
 
   docker_build_and_scan:
     name: Docker build + Trivy scan (block HIGH/CRITICAL)
     runs-on: ubuntu-latest
-    needs: [ sonar ]
+    needs: [sonar]
 
     outputs:
       image: ${{ steps.meta.outputs.image }}
@@ -125,7 +125,7 @@ jobs:
   push_ghcr:
     name: Push image to GHCR
     runs-on: ubuntu-latest
-    needs: [ docker_build_and_scan ]
+    needs: [docker_build_and_scan]
 
     steps:
       - name: Checkout
