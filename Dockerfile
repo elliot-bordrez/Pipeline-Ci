@@ -9,6 +9,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+RUN node -v && which npm && npm -v
+
 # Installer uniquement les deps prod
 COPY package*.json ./
 RUN npm install --omit=dev
