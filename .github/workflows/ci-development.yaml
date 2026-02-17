@@ -71,7 +71,7 @@ jobs:
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
       - name: Quality Gate (block if failed)
-        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        uses: SonarSource/sonarqube-scan-action@v7.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
